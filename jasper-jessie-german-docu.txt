@@ -1,0 +1,234 @@
+﻿Starting RASPI after the image (JESSIE) is on SD Card
+
+sudo apt-get update
+sudo apt-get dist-upgrade
+
+At the moment do not use rpi-update otherwise your alsamixer will not work.
+
+sudo nano /etc/dphys-swapfile  !!! ONLY RASPI 2  !!!
+"CONF_SWAPSIZE=100" => "CONF_SWAPSIZE=1000" || to avoid problems while compilation and using all 4 processors for compiling. ( exp. make -j4  )
+sudo reboot
+wait some minutes
+
+
+Soundcard
+
+pi@pi:~ $ aplay -l
+
+**** Liste der Hardware-Geräte (PLAYBACK) ****
+
+Karte 0: ALSA [bcm2835 ALSA], Gerät 0: bcm2835 ALSA [bcm2835 ALSA]
+  Sub-Geräte: 8/8
+  Sub-Gerät #0: subdevice #0
+  Sub-Gerät #1: subdevice #1
+  Sub-Gerät #2: subdevice #2
+  Sub-Gerät #3: subdevice #3
+  Sub-Gerät #4: subdevice #4
+  Sub-Gerät #5: subdevice #5
+  Sub-Gerät #6: subdevice #6
+  Sub-Gerät #7: subdevice #7
+Karte 0: ALSA [bcm2835 ALSA], Gerät 1: bcm2835 ALSA [bcm2835 IEC958/HDMI]
+  Sub-Geräte: 1/1
+  Sub-Gerät #0: subdevice #0
+
+Karte 1: Set [C-Media USB Headphone Set], Gerät 0: USB Audio [USB Audio]
+  Sub-Geräte: 1/1
+  Sub-Gerät #0: subdevice #0
+
+File /etc/modprobe.d/alsa-base.conf  isn't existing anymore !!!
+Instead configure only /etc/asound.conf
+
+pcm.!default {
+    type plug
+    slave { 
+        pcm "hw:1,0"
+    }
+}
+ctl.!default {
+    type hw
+    card 1
+}
+
+If you are using pulseaudio:
+
+sudo apt-get install pulseaudio
+edit:
+sudo vi /etc/pulse/default.pa
+remove # from
+#load-module module-alsa-source device=hw:1,0
+#set-default-source input
+
+
+Start Installation
+
+sudo apt-get install vim git-core python-dev bison libasound2-dev libportaudio-dev python-pyaudio swig --yes
+
+Remove python-pip from Raspi
+sudo apt-get remove python-pip
+Install python-pip new
+wget https://raw.github.com/pypa/pip/master/contrib/get-pip.py
+sudo python get-pip.py
+
+sudo pip install slugify
+sudo apt-get install python-pymad
+
+
+Add the following line to the end of ~/.bash_profile (you may need to run touch ~/.bash_profile if the file doesn’t exist already):
+
+export LD_LIBRARY_PATH="/usr/local/lib"
+source .bashrc
+
+And this to your ~/.bashrc or ~/.bash_profile:
+
+LD_LIBRARY_PATH="/usr/local/lib"
+export LD_LIBRARY_PATH
+PATH=$PATH:/usr/local/lib/
+export PATH
+With that, we’re ready to install Jasper.
+
+
+Installing Jasper
+
+git clone https://github.com/jasperproject/jasper-client.git jasper
+sudo pip install --upgrade setuptools
+sudo pip install -r jasper/client/requirements.txt
+chmod +x jasper/jasper.py
+
+
+Installing dependencies
+
+wget http://downloads.sourceforge.net/project/cmusphinx/sphinxbase/0.8/sphinxbase-0.8.tar.gz
+tar -zxvf sphinxbase-0.8.tar.gz
+cd ~/sphinxbase-0.8/
+./configure --enable-fixed
+make -j4
+sudo make install -j4
+wget http://downloads.sourceforge.net/project/cmusphinx/pocketsphinx/0.8/pocketsphinx-0.8.tar.gz
+tar -zxvf pocketsphinx-0.8.tar.gz
+cd ~/pocketsphinx-0.8/
+./configure
+make -j4
+sudo make install -j4
+
+sudo apt-get install subversion autoconf libtool automake gfortran g++ --yes
+svn co https://svn.code.sf.net/p/cmusphinx/code/trunk/cmuclmtk/
+cd cmuclmtk/
+sudo ./autogen.sh && sudo make && sudo make install -j4
+cd ..
+
+Download openfst-1.3.3.tar.gz from here:
+http://www.openfst.org/twiki/bin/view/FST/FstDownload
+
+Then get:
+wget https://mitlm.googlecode.com/files/mitlm-0.4.1.tar.gz
+wget https://m2m-aligner.googlecode.com/files/m2m-aligner-1.2.tar.gz
+
+Download phonetisaurus-0.7.8.tgz from here:
+https://launchpad.net/debian/+source/phonetisaurus/0.7.8-1
+
+
+tar -xvf m2m-aligner-1.2.tar.gz
+tar -xvf openfst-1.3.3.tar.gz
+tar -xvf phonetisaurus-0.7.8.tgz
+tar -xvf mitlm-0.4.1.tar.gz
+
+cd openfst-1.3.3/
+sudo ./configure --enable-compact-fsts --enable-const-fsts --enable-far --enable-lookahead-fsts --enable-pdt
+sudo make install -j4
+
+cd m2m-aligner-1.2/
+sudo make-j4
+
+cd mitlm-0.4.1/
+sudo ./configure
+sudo make install-j4
+
+cd phonetisaurus-0.7.8/
+cd src
+sudo make-j4
+
+Use „-j4“ only with RASPI 2
+
+sudo cp ~/m2m-aligner-1.2/m2m-aligner /usr/local/bin/m2m-aligner
+sudo cp ~/phonetisaurus-0.7.8/phonetisaurus-g2p /usr/local/bin/phonetisaurus-g2p
+
+wget https://www.dropbox.com/s/kfht75czdwucni1/g014b2b.tgz
+tar -xvf g014b2b.tgz
+
+Build Phonetisaurus model:
+cd g014b2b/
+./compile-fst.sh
+cd ..
+mv ~/g014b2b ~/phonetisaurus
+
+
+SVOX Pico TTS engine 
+sudo apt-get install libpopt-dev
+sudo dpkg --install pico2wave.deb
+
+After that go on with jasper configuration 
+
+Updating Jasper
+
+cd ~/jasper
+git fetch origin
+git checkout -- .
+git checkout origin/jasper-dev
+git checkout origin/feat/multilanguage-support
+
+Change Jasper to German language
+
+wget http://goofy.zamia.org/voxforge/de/voxforge-de-r20141117.tgz
+tar xvzf voxforge-de-r20141117.tgz
+cd voxforge-de-r20141117; nano run-pocketsphinx.sh
+
+The file run-pocketsphinx.sh should look like:
+
+#!/bin/bash
+pocketsphinx_continuous \
+    -hmm model_parameters/voxforge.cd_cont_3000 \
+    -lw 10 -feat 1s_c_d_dd -beam 1e-80 -wbeam 1e-40 \
+    -dict etc/voxforge.dic \
+    -wip 0.2 \
+    -agc none -varnorm no -cmn current -inmic yes \
+    -lm etc/voxforge.lm.DMP
+If you want to test everything you can just run:
+
+./run-pocketsphinx.sh
+
+
+Change ~/.jasper/profile.yml
+
+language: 'de-DE'
+carrier: ''
+first_name: XXXX
+gmail_password: ''
+location: XXXX
+phone_number: ''
+prefers_email: false
+stt_engine: sphinx
+pocketsphinx:
+  fst_model: '../phonetisaurus/g014b2b.fst'                              #optional
+  hmm_dir: '/home/pi/voxforge-de-r20141117/model_parameters/voxforge.cd_cont_3000'
+tts_engine: pico-tts
+timezone: Europe/Berlin
+input_device: 'default'
+output_device: 'default'
+
+$ sudo apt-get update
+$ sudo apt-get install gettext
+
+There is a convenience script to compile all *.po files into their respective *.mo files. First update your jasper installation:
+
+$ cd ~/jasper
+$ git fetch origin
+$ git checkout origin/feat/multilanguage-support
+
+Then you can run the script:
+
+$ cd ~/jasper
+$ ./compile_translations.sh
+
+You only need to do this once (unless the translations get updated or new ones are added). After doing that, You can run jasper and test.
+
+Thanks for all support to Jan Holthuis 
